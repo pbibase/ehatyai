@@ -1,0 +1,113 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model User {
+  id           String        @id @default(uuid())
+  name         String
+  email        String        @unique
+  phone        String        @unique
+  passwordHash String
+  verified     Boolean       @default(false)
+  createdAt    DateTime      @default(now())
+  bookings     Booking[]
+  otpCodes     OtpCode[]
+}
+
+model Property {
+  id          String     @id @default(uuid())
+  name        String
+  location    String     // e.g. "Lee Gardens, Hat Yai"
+  type        String     // e.g. "Hotel", "Resort", "Apartment"
+  description String
+  amenities   String     // Comma-separated list: e.g. "WiFi, Pool, AC"
+  photos      String     // Comma-separated photo paths/URLs
+  rating      Float      // e.g. 4.5
+  roomTypes   RoomType[]
+}
+
+model RoomType {
+  id          String          @id @default(uuid())
+  propertyId  String
+  property    Property        @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  name        String          // e.g. "Deluxe Double Room"
+  capacity    Int             // max guests
+  basePrice   Float           // base price per night
+  inventories RoomInventory[]
+  bookings    Booking[]
+}
+
+model RoomInventory {
+  id         String   @id @default(uuid())
+  roomTypeId String
+  roomType   RoomType @relation(fields: [roomTypeId], references: [id], onDelete: Cascade)
+  date       DateTime // Date of availability
+  totalCount Int      // Total physical rooms of this type
+  
+  @@unique([roomTypeId, date])
+}
+
+model Booking {
+  id             String         @id // Generated custom Booking ID (Step 9)
+  userId         String
+  user           User           @relation(fields: [userId], references: [id])
+  roomTypeId     String
+  roomType       RoomType       @relation(fields: [roomTypeId], references: [id])
+  checkIn        DateTime
+  checkOut       DateTime
+  guests         Int
+  status         String         // "Draft", "Pending-Payment", "Confirmed", "Cancelled"
+  priceBreakdown String         // JSON string: { basePrice, nights, subtotal, taxes, fees, discount, netAmount, promoCode }
+  idempotencyKey String?        @unique
+  holdExpiresAt  DateTime?      // When the room hold expires
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  payments       Payment[]
+  notifications  Notification[]
+}
+
+model Payment {
+  id         String   @id @default(uuid())
+  bookingId  String
+  booking    Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  method     String   // "card", "promptpay", "ewallet"
+  amount     Float
+  status     String   // "Pending", "Success", "Failed"
+  attempts   Int      // number of attempts made so far
+  gatewayRef String?  // gateway transaction reference
+  createdAt  DateTime @default(now())
+}
+
+model Notification {
+  id             String   @id @default(uuid())
+  bookingId      String
+  booking        Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  channel        String   // "email", "sms"
+  sentAt         DateTime @default(now())
+  deliveryStatus String   // "Sent", "Failed"
+  content        String
+}
+
+model OtpCode {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  code      String
+  expiresAt DateTime
+  type      String   // "email", "sms"
+  createdAt DateTime @default(now())
+}
+
+model PromoCode {
+  id        String   @id @default(uuid())
+  code      String   @unique // e.g. "HATYAI100"
+  discount  Float    // Discount amount (e.g. 100) or percentage
+  isPercent Boolean  @default(false)
+}
